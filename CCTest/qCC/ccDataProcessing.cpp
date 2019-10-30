@@ -123,13 +123,14 @@ int WritePreProcessingFile(QString qsOutPath, LidarPointCLoudA* PtA, size_t nVec
 	if (!ft) return -1;
 	for (size_t i = 0; i < nVecSize; i++)
 	{
-		ft.write((char*)&PtA[i], sizeof(LidarPointCLoudA));
+		ft.write((char*)&PtA[i], sizeof(PtA));
 	}
 	ft.close();
 	/*ofstream ft(cPath, ios::out);
 	for (size_t i = 0; i < nVecSize; i++)
 	{
-		ft << PtA[i].dX << " " << PtA[i].dY <<" "<<PtA[i].dZ<< endl;
+		ft << PtA[i].nPauseNum << " " << PtA[i].dL << endl;
+
 	}
 	ft.close();*/
 
@@ -146,18 +147,16 @@ LidarPointCLoudA* ReadPreProcessingFile(QString qaInPath, int &nFileLoop)
 	qba = qaInPath.toLatin1();
 	cPath = qba.data();
 
-
 	ifstream ft(cPath, ios::binary);
 	if (!ft) return 0;
 	ft.seekg(0, ios::end);
-	streampos lFileSize = ft.tellg();
-	nFileLoop = lFileSize / sizeof(LidarPointCLoudA);
+	nFileLoop = ft.tellg() / sizeof(LidarPointCLoudA);
 	ft.seekg(0, ios::beg);
-	LidarPointCLoudA* PtA = new LidarPointCLoudA[nFileLoop];
 
+	LidarPointCLoudA* PtA = new LidarPointCLoudA[nFileLoop];
 	for (int i = 0; i < nFileLoop; i++)
 	{
-		ft.read((char*)&PtA[i], sizeof(LidarPointCLoudA));
+		ft.read((char*)&PtA[i], sizeof(PtA));
 	}
 	ft.close();
 
