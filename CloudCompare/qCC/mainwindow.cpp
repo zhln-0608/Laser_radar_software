@@ -116,6 +116,10 @@
 #include "ccVolumeCalcTool.h"
 #include "ccWaveformDialog.h"
 #include "PreprocessingDlg.h"
+#include "systemArgumentsDlg.h"
+#include "flightArgumentsDlg.h"
+#include "dsm_dialog.h"
+#include "computeMeasureDlg.h"
 
 //other
 #include "ccCropTool.h"
@@ -602,9 +606,11 @@ void MainWindow::connectActions()
 	connect(m_UI->actionDelete,						&QAction::triggered,	m_ccRoot,	&ccDBRoot::deleteSelectedEntities);
 
 	//单光子数据处理menu
+	connect(m_UI->actionChangeSysArguments, &QAction::triggered, this, &MainWindow::doActionChangeSysArguments);
 	connect(m_UI->actionDataPreprocessing, &QAction::triggered, this, &MainWindow::doActionDataPreprocessing);
 	connect(m_UI->actionComputeLocal, &QAction::triggered, this, &MainWindow::doActionComputeLocal);
 	connect(m_UI->actionPOS, &QAction::triggered, this, &MainWindow::doActionPOS);
+	connect(m_UI->actionChangeFlightArguments, &QAction::triggered, this, &MainWindow::doActionChangeFlightArguments);
 	connect(m_UI->actionComputeMeasure, &QAction::triggered, this, &MainWindow::doActionComputeMeasure);
 
 	//点云数据处理menu
@@ -620,7 +626,7 @@ void MainWindow::connectActions()
 	connect(m_UI->actionDLG, &QAction::triggered, this, &MainWindow::doActionDLG);
 	connect(m_UI->actionDOM, &QAction::triggered, this, &MainWindow::doActionDOM);
 
-	//"Tools > Clean" menu
+	//"Tools > Clean" menu and "点云数据处理"->"点云滤波"子菜单
 	connect(m_UI->actionSORFilter,					&QAction::triggered, this, &MainWindow::doActionSORFilter);
 	connect(m_UI->actionNoiseFilter,				&QAction::triggered, this, &MainWindow::doActionFilterNoise);
 
@@ -3842,6 +3848,14 @@ void MainWindow::doActionSubsample()
 }
 
 //    TODO: 添加具体方法
+
+void MainWindow::doActionChangeSysArguments()
+{
+	SystemArgumentsDlg systemArgumentsDialog(this);
+
+	systemArgumentsDialog.exec();
+}
+
 void MainWindow::doActionDataPreprocessing()
 {
 	qDebug() << "PreProcessing Clicked";
@@ -3857,13 +3871,16 @@ void MainWindow::doActionDataPreprocessing()
 
 void MainWindow::doActionComputeLocal()
 {
+	extern double dAngle;
+	extern double dR1;
+	extern double dR2;
 	qDebug() << QStringLiteral("点击计算点云本地");
 	QString fileName = QFileDialog::getOpenFileName(this, QStringLiteral("打开数据文件"),defaultAddressNew,"(*.dat)");
-	int iSize = 0;
+	size_t iSize = 0;
 	if (!fileName.isNull()) {
 		LidarPointCLoudA * cloud = new LidarPointCLoudA();
 		cloud = ReadPreProcessingFile(fileName,iSize);
-		cloud = CalBtXYZprocess(cloud, iSize);
+		cloud = CalBtXYZprocess(cloud, iSize, dAngle, dR1, dR2);
 		if (0 == QMessageBox::question(this, QStringLiteral("执行完毕"), QStringLiteral("本体坐标系点云计算成功，是否保存？"), QStringLiteral("保存"), QStringLiteral("取消"))) {
 			fileName = QFileDialog::getSaveFileName(this,
 				QStringLiteral("保存文件"), "projectFileName.dat", QStringLiteral("数据文件 (*.dat)"));
@@ -3888,9 +3905,18 @@ void MainWindow::doActionPOS()
 
 }
 
+void MainWindow::doActionChangeFlightArguments()
+{
+	FlightArgumentsDlg flightArgumentsDialog(this);
+
+	flightArgumentsDialog.exec();
+}
+
 void MainWindow::doActionComputeMeasure()
 {
-
+	qDebug() << QStringLiteral("开始计算测量坐标系");
+	ComputeMeasureDlg computeMeasureDialog(this);
+	computeMeasureDialog.exec();
 }
 
 void MainWindow::doActionCloudSmoothing()
@@ -3920,7 +3946,9 @@ void MainWindow::doActionCloudData()
 
 void MainWindow::doActionDSM()
 {
+	DSM_Dialog DSM_Dialog(this);
 
+	DSM_Dialog.exec();
 }
 
 void MainWindow::doActionDEM()

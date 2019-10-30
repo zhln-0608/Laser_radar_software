@@ -1,6 +1,6 @@
 #include "ccFunction.h"
 
-int ReadSiglePhotonData(char cpath[], vector<LidarALLData>&vAlldata)
+int ReadSiglePhotonData(char cpath[], vector<LidarALLData>&vAlldata, QProgressDialog * progress)
 {
 	int nEvent_CH1[] = { 0,0,0,0,0,0,0 };		//0		CH1
 	int nEvent_CH2[] = { 0,0,0,0,0,0,1 };		//1		CH2
@@ -43,7 +43,7 @@ int ReadSiglePhotonData(char cpath[], vector<LidarALLData>&vAlldata)
 	//lLoop = 3000000;	//测试
 	for (int nl = 0; nl < lLoop; nl++)
 	{
-
+		progress->setValue(nl / lLoop * 100 / 3);
 		uint32_t t_nMSB;
 		fread(&t_nMSB, 4, 1, fp);
 		t_nMSB = htonl(t_nMSB);
@@ -153,7 +153,7 @@ int ReadSiglePhotonData(char cpath[], vector<LidarALLData>&vAlldata)
 }
 
 
-int CalPauseCodeTime(vector<LidarALLData>vAlldata, LidarPointCLoudA *PtA)
+int CalPauseCodeTime(vector<LidarALLData>vAlldata, LidarPointCLoudA *PtA, QProgressDialog* progress)
 {
 	size_t sVecSize = vAlldata.size();
 	//角度
@@ -334,7 +334,7 @@ int CalPauseCodeTime(vector<LidarALLData>vAlldata, LidarPointCLoudA *PtA)
 			{
 				if (vAlldata[nM1_start + j].nPaulseNum == nn1 && bT == true)
 				{
-					PtA[nM1_start + j].dSegTime = dT + nb / (double)nNum_M1 + 18;	//2019年 UTC +18s -> GPS
+					PtA[nM1_start + j].dSegTime = dT + nb / (double)nNum_M1 + 18;	//2019 UTC->GPS
 					PtA[nM1_start + j].nDate = nT1;
 				}
 				if (vAlldata[nM1_start + j].nPaulseNum > nn1)
@@ -354,30 +354,66 @@ int CalPauseCodeTime(vector<LidarALLData>vAlldata, LidarPointCLoudA *PtA)
 
 	}
 
+
+	//检查重叠区域
+	int nMaxNum = 1;
+	int nMinNum = 0;
+	int *nNum = new int[500];
+	int nMaxRange = 0;
+	int nMaxLoc = 0;
+	double dUsuDis = 0.0;
+	for (int i = 0; i < 500; i++)
+	{
+		int nNumTemp = 0;
+		for (size_t j = 0; j < sVecSize; j++)
+		{
+			double dL = vAlldata[j].nTimeInfo*0.000000000001 * 64 * LightSpeed / 2.0;
+			if (vAlldata[i].nFlag != 1 && dL > nMinNum&&dL < nMaxNum)
+				nNumTemp++;
+		}
+		nNum[i] = nNumTemp;
+		nMaxNum++;
+		nMinNum++;
+	}
+	for (int i = 50; i < 500; i++)
+	{
+		if (nNum[i] > nMaxRange)
+		{
+			nMaxRange = nNum[i];
+			nMaxLoc = i;
+		}
+	}
+	if (nMaxLoc < 150)
+	{
+		dUsuDis = LightSpeed / 502861 * 0.5;
+	}
+
 	for (size_t i = 0; i < sVecSize; i++)
 	{
 		PtA[i].nChannel = vAlldata[i].nChannel;
 		PtA[i].nPauseNum = vAlldata[i].nPaulseNum;
-		PtA[i].dL = vAlldata[i].nTimeInfo*0.000000000001 * 64 * LightSpeed / 2.0;
+		PtA[i].dL = dUsuDis + vAlldata[i].nTimeInfo*0.000000000001 * 64 * LightSpeed / 2.0;
 	}
 
 	return 0;
 }
 
 
-void CalBtXYZ(LidarPointCLoudA* &PtA, int nsize)
+void CalBtXYZ(LidarPointCLoudA* &PtA, int nsize, double dAngle, double dR1, double dR2)
 {
 	for (size_t i = 0; i < nsize; i++)
 	{
 		if (PtA[i].dAngle > 0)
 		{
-			double dPsi = (360 - PtA[i].dAngle - 33.47)*PI / 180.0;
+			double dPsi = (360 - PtA[i].dAngle - dAngle)*PI / 180.0;
 			double dVectorNormalRaypath1 = (2.5033e66*pow(cos(dPsi), 2.0) - 1.3571e67*cos(dPsi) +
 				4.4718e65*pow(cos(dPsi), 4.0) + 8.786e65) / ((1.3124e67*cos(dPsi) + 8.6388e65*pow(cos(dPsi), 2.0) - 5.157e67));
 			double dVectorNormalRaypath2 = (1.1697e66*sin(2.0*dPsi) + 5.2036e63*sin(4.0*dPsi) + 2.3715e65*sin(3.0*dPsi) -
 				1.8639e67*sin(dPsi)) / (2.6247e67*cos(dPsi) + 1.7278e66*pow(cos(dPsi), 2.0) - 1.0314e68);
 			double dVectorNormalRaypath3 = (8.9436e64*pow(cos(dPsi), 3.0) - 6.9111e65*pow(cos(dPsi), 2.0) - 5.16e66*cos(dPsi) +
 				5.8872e63*pow(cos(dPsi), 4.0) + 2.0277e67) / (5.2495e66*cos(dPsi) + 3.4555e65*pow(cos(dPsi), 2.0) - 2.0628e67);
+
+			PtA[i].dL += dR1 + dR2 * PtA[i].dL;
 
 			PtA[i].dX = PtA[i].dL * dVectorNormalRaypath1;
 			PtA[i].dY = PtA[i].dL * dVectorNormalRaypath2;
@@ -538,7 +574,7 @@ int CheckStacking(vector<LidarALLData>vFilterData)
 	return dUsuDis;
 }
 
-vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue)
+vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue, QProgressDialog * progress)
 {
 	vector<LidarALLData>vFilter;
 
@@ -547,6 +583,7 @@ vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue)
 	int *nNum = new int[500];
 	int nMaxRange = 0;
 	int nMaxLoc = 0;
+	progress->setValue(35);
 	for (int i = 0; i < 500; i++)
 	{
 		int nNumTemp = 0;
@@ -559,6 +596,7 @@ vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue)
 		nNum[i] = nNumTemp;
 		nMaxNum++;
 		nMinNum++;
+		progress->setValue(i * 100 / 500 / 5 + 35);
 	}
 	for (int i = 50; i < 500; i++)
 	{
@@ -567,8 +605,9 @@ vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue)
 			nMaxRange = nNum[i];
 			nMaxLoc = i;
 		}
+		progress->setValue(i * 100 / 500 / 5 + 55);
 	}
-
+	int sizeNN = vAlldata.size();
 	for (size_t i = 0; i < vAlldata.size(); i++)
 	{
 		double dL = vAlldata[i].nTimeInfo*0.000000000001 * 64 * LightSpeed / 2.0;
@@ -576,6 +615,7 @@ vector<LidarALLData> HistogramExFilter(vector<LidarALLData>vAlldata, int nValue)
 		{
 			vFilter.push_back(vAlldata[i]);
 		}
+		progress->setValue(i * 100 / sizeNN / 5 + 75);
 	}
 	delete[]nNum; nNum = NULL;
 
@@ -715,7 +755,7 @@ double N_STDEV = 1.0;
 int PERIOD_GROUP_COUNT = 50000 / PULSE_NUM_INT;
 double MIN_MEAN_PERCENT = 0.20;
 
-int filter(vector<LidarALLData>&vAlldata, vector<LidarALLData>&filteredData) {
+int filter(vector<LidarALLData>&vAlldata, vector<LidarALLData>&filteredData, QProgressDialog *progress) {
 	int i = 0;
 	while (true) {
 		if (i >= vAlldata.size()) {
@@ -729,6 +769,7 @@ int filter(vector<LidarALLData>&vAlldata, vector<LidarALLData>&filteredData) {
 		GroupStats stats = statsGroup(group);
 		sort(group.begin(), group.end(), compareItemByIndex);
 		for (int j = 0; j < group.size(); j++) {
+			progress->setValue(i * 100 / group.size() / 5 + 35);
 			// keep marker
 			if (group[j].data.nFlag != 1) {
 				if (group[j].kmean_dist > stats.mean + stats.stdev * N_STDEV) {

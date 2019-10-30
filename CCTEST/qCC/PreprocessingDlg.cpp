@@ -135,6 +135,9 @@ void PreprocessingDlg::chooseFile() {
 }
 
 void PreprocessingDlg::exert() {
+	extern double dAngle;
+	extern double dR1;
+	extern double dR2;
 	if (address.size() == 0) {
 		QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("请至少选择一个文件"), QStringLiteral("确定"));
 		return;
@@ -200,19 +203,28 @@ void PreprocessingDlg::exert() {
 		return;
 	}
 	else {
+		progress = new QProgressDialog(QStringLiteral("进度"), QStringLiteral("取消"), 0, 100, this);
+		progress->setWindowModality(Qt::WindowModal);
+		progress->show();
+		progress->setValue(0);
+		int value = PreprocessingDlg::spinBox->value();
 		if (radioButton->isChecked()) {
+			qDebug() << "run Algorithm";
 			qDebug() << PreprocessingDlg::spinBox->value();
-			cloud = KNNProcess(address, PreprocessingDlg::spinBox->value(), iSize, chooseCH);
+			cloud = KNNProcess(address, value, iSize, chooseCH, progress);
 		}
 		else if (radioButton_2->isChecked()) {
-			cloud = HistogramFiltProcess(address, PreprocessingDlg::spinBox->value(), iSize, chooseCH);
+			qDebug() << "run Algorithm";
+			cloud = HistogramFiltProcess(address, value, iSize, chooseCH);
 			progress->close();
 		}
 		else if (radioButton_3->isChecked()) {
-			cloud = mDBSCAN_filterprocessing(address, PreprocessingDlg::spinBox->value(), iSize, chooseCH);
+			qDebug() << "run Algorithm";
+			cloud = mDBSCAN_filterprocessing(address, value, iSize, chooseCH);
 			progress->close();
 		}
 		else if (radioButton_4->isChecked()) {
+			qDebug() << "run Algorithm";
 			cloud = Unfilterprocessing(address, iSize, chooseCH);
 			progress->close();
 		}
@@ -232,7 +244,7 @@ void PreprocessingDlg::exert() {
 			//QMessageBox::information(this, QStringLiteral("保存成功"), QStringLiteral("保存成功！"), QStringLiteral("确定"));
 			if (0 == QMessageBox::question(this, QStringLiteral("保存成功"), QStringLiteral("数据已保存成功，是否进行本体坐标点云计算？"), QStringLiteral("是"), QStringLiteral("否"))) {
 				//TODO::函数接口
-				cloud = CalBtXYZprocess(cloud, iSize);
+				cloud = CalBtXYZprocess(cloud, iSize, dAngle, dR1, dR2);
 				if (0 == QMessageBox::question(this, QStringLiteral("执行完毕"), QStringLiteral("本体坐标系点云计算成功，是否保存？"), QStringLiteral("保存"), QStringLiteral("取消"))) {
 					fileName = QFileDialog::getSaveFileName(this,
 						QStringLiteral("保存文件"), "projectFileName.dat", QStringLiteral("数据文件 (*.dat)"));
